@@ -32,7 +32,6 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
-import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SpinnerNumberModel;
@@ -76,7 +75,6 @@ import jadx.gui.utils.LangLocale;
 import jadx.gui.utils.NLS;
 import jadx.gui.utils.UiUtils;
 import jadx.gui.utils.ui.ActionHandler;
-import jadx.gui.utils.ui.DocumentUpdateListener;
 
 public class JadxSettingsWindow extends JDialog {
 	private static final long serialVersionUID = -1804570470377354148L;
@@ -138,7 +136,6 @@ public class JadxSettingsWindow extends JDialog {
 		groups.add(new CacheSettingsGroup(this));
 		groups.add(makeAppearanceGroup());
 		groups.add(new ShortcutsSettingsGroup(this, settings));
-		groups.add(makeSearchResGroup());
 		groups.add(makeProjectGroup());
 		groups.add(new PluginSettings(mainWindow, settings).build());
 		groups.add(makeOtherGroup());
@@ -186,6 +183,7 @@ public class JadxSettingsWindow extends JDialog {
 		buttonPane.setLayout(new BoxLayout(buttonPane, BoxLayout.LINE_AXIS));
 		buttonPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 		buttonPane.add(resetBtn);
+		buttonPane.add(Box.createRigidArea(new Dimension(10, 0)));
 		buttonPane.add(copyBtn);
 		buttonPane.add(Box.createHorizontalGlue());
 		buttonPane.add(saveBtn);
@@ -637,6 +635,10 @@ public class JadxSettingsWindow extends JDialog {
 		jumpOnDoubleClick.setSelected(settings.isJumpOnDoubleClick());
 		jumpOnDoubleClick.addItemListener(e -> settings.setJumpOnDoubleClick(e.getStateChange() == ItemEvent.SELECTED));
 
+		JSpinner resultsPerPage = new JSpinner(
+				new SpinnerNumberModel(settings.getSearchResultsPerPage(), 0, Integer.MAX_VALUE, 1));
+		resultsPerPage.addChangeListener(ev -> settings.setSearchResultsPerPage((Integer) resultsPerPage.getValue()));
+
 		JCheckBox useAltFileDialog = new JCheckBox();
 		useAltFileDialog.setSelected(settings.isUseAlternativeFileDialog());
 		useAltFileDialog.addItemListener(e -> settings.setUseAlternativeFileDialog(e.getStateChange() == ItemEvent.SELECTED));
@@ -644,6 +646,10 @@ public class JadxSettingsWindow extends JDialog {
 		JCheckBox update = new JCheckBox();
 		update.setSelected(settings.isCheckForUpdates());
 		update.addItemListener(e -> settings.setCheckForUpdates(e.getStateChange() == ItemEvent.SELECTED));
+
+		JCheckBox disableTooltipOnHover = new JCheckBox();
+		disableTooltipOnHover.setSelected(settings.isDisableTooltipOnHover());
+		disableTooltipOnHover.addItemListener(e -> settings.setDisableTooltipOnHover(e.getStateChange() == ItemEvent.SELECTED));
 
 		JCheckBox cfg = new JCheckBox();
 		cfg.setSelected(settings.isCfgOutput());
@@ -678,6 +684,8 @@ public class JadxSettingsWindow extends JDialog {
 		SettingsGroup group = new SettingsGroup(NLS.str("preferences.other"));
 		group.addRow(NLS.str("preferences.lineNumbersMode"), lineNumbersMode);
 		group.addRow(NLS.str("preferences.jumpOnDoubleClick"), jumpOnDoubleClick);
+		group.addRow(NLS.str("preferences.disable_tooltip_on_hover"), disableTooltipOnHover);
+		group.addRow(NLS.str("preferences.search_results_per_page"), resultsPerPage);
 		group.addRow(NLS.str("preferences.useAlternativeFileDialog"), useAltFileDialog);
 		group.addRow(NLS.str("preferences.cfg"), cfg);
 		group.addRow(NLS.str("preferences.raw_cfg"), rawCfg);
@@ -685,29 +693,6 @@ public class JadxSettingsWindow extends JDialog {
 		group.addRow(NLS.str("preferences.check_for_updates"), update);
 		group.addRow(NLS.str("preferences.update_channel"), updateChannel);
 		return group;
-	}
-
-	private SettingsGroup makeSearchResGroup() {
-		JSpinner resultsPerPage = new JSpinner(
-				new SpinnerNumberModel(settings.getSearchResultsPerPage(), 0, Integer.MAX_VALUE, 1));
-		resultsPerPage.addChangeListener(ev -> settings.setSearchResultsPerPage((Integer) resultsPerPage.getValue()));
-
-		JSpinner sizeLimit = new JSpinner(
-				new SpinnerNumberModel(settings.getSrhResourceSkipSize(), 0, Integer.MAX_VALUE, 1));
-		sizeLimit.addChangeListener(ev -> settings.setSrhResourceSkipSize((Integer) sizeLimit.getValue()));
-
-		JTextField fileExtField = new JTextField();
-		fileExtField.getDocument().addDocumentListener(new DocumentUpdateListener(ev -> {
-			String ext = fileExtField.getText();
-			settings.setSrhResourceFileExt(ext);
-		}));
-		fileExtField.setText(settings.getSrhResourceFileExt());
-
-		SettingsGroup searchGroup = new SettingsGroup(NLS.str("preferences.search_group_title"));
-		searchGroup.addRow(NLS.str("preferences.search_results_per_page"), resultsPerPage);
-		searchGroup.addRow(NLS.str("preferences.res_skip_file"), sizeLimit);
-		searchGroup.addRow(NLS.str("preferences.res_file_ext"), fileExtField);
-		return searchGroup;
 	}
 
 	private void closeGroups(boolean save) {
