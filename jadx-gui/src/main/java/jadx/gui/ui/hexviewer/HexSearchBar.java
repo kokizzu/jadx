@@ -5,7 +5,6 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 
-import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
@@ -19,11 +18,15 @@ import org.exbin.bined.swing.section.SectCodeArea;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.formdev.flatlaf.FlatClientProperties;
+
 import jadx.core.utils.StringUtils;
 import jadx.gui.ui.hexviewer.search.BinarySearch;
 import jadx.gui.ui.hexviewer.search.SearchCondition;
 import jadx.gui.ui.hexviewer.search.SearchParameters;
 import jadx.gui.ui.hexviewer.search.service.BinarySearchServiceImpl;
+import jadx.gui.utils.HexUtils;
+import jadx.gui.utils.Icons;
 import jadx.gui.utils.NLS;
 import jadx.gui.utils.TextStandardActions;
 import jadx.gui.utils.UiUtils;
@@ -32,16 +35,6 @@ public class HexSearchBar extends JToolBar {
 	private static final long serialVersionUID = 1836871286618633003L;
 
 	private static final Logger LOG = LoggerFactory.getLogger(HexSearchBar.class);
-	private static final Icon ICON_MARK = UiUtils.openSvgIcon("search/mark");
-	private static final Icon ICON_MARK_SELECTED = UiUtils.openSvgIcon("search/previewSelected");
-	private static final Icon ICON_FIND_TYPE_TXT = UiUtils.openSvgIcon("search/text");
-	private static final Icon ICON_FIND_TYPE_HEX = UiUtils.openSvgIcon("search/hexSerial");
-	private static final Icon ICON_MATCH = UiUtils.openSvgIcon("search/matchCaseHovered");
-	private static final Icon ICON_MATCH_SELECTED = UiUtils.openSvgIcon("search/matchCaseSelected");
-	private static final Icon ICON_UP = UiUtils.openSvgIcon("ui/top");
-	private static final Icon ICON_DOWN = UiUtils.openSvgIcon("ui/bottom");
-	private static final Icon ICON_CLOSE = UiUtils.openSvgIcon("ui/close");
-
 	private final SectCodeArea hexCodeArea;
 
 	private final JTextField searchField;
@@ -61,6 +54,7 @@ public class HexSearchBar extends JToolBar {
 		add(findLabel);
 
 		searchField = new JTextField(30);
+		searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
 		searchField.addKeyListener(new KeyAdapter() {
 			@Override
 			public void keyReleased(KeyEvent e) {
@@ -78,7 +72,7 @@ public class HexSearchBar extends JToolBar {
 			}
 		});
 		searchField.addActionListener(e -> control.notifySearchChanging());
-		new TextStandardActions(searchField);
+		TextStandardActions.attach(searchField);
 		add(searchField);
 
 		ActionListener searchSettingListener = e -> control.notifySearchChanged();
@@ -89,15 +83,15 @@ public class HexSearchBar extends JToolBar {
 		add(resultCountLabel);
 
 		matchCaseCB = new JToggleButton();
-		matchCaseCB.setIcon(ICON_MATCH);
-		matchCaseCB.setSelectedIcon(ICON_MATCH_SELECTED);
+		matchCaseCB.setIcon(Icons.ICON_MATCH);
+		matchCaseCB.setSelectedIcon(Icons.ICON_MATCH_SELECTED);
 		matchCaseCB.setToolTipText(NLS.str("search.match_case"));
 		matchCaseCB.addActionListener(searchSettingListener);
 		add(matchCaseCB);
 
 		findTypeCB = new JToggleButton();
-		findTypeCB.setIcon(ICON_FIND_TYPE_TXT);
-		findTypeCB.setSelectedIcon(ICON_FIND_TYPE_HEX);
+		findTypeCB.setIcon(Icons.ICON_FIND_TYPE_TXT);
+		findTypeCB.setSelectedIcon(Icons.ICON_FIND_TYPE_HEX);
 		if (findTypeCB.isSelected()) {
 			findTypeCB.setToolTipText(NLS.str("search.find_type_hex"));
 		} else {
@@ -111,29 +105,29 @@ public class HexSearchBar extends JToolBar {
 		add(findTypeCB);
 
 		prevMatchButton = new JButton();
-		prevMatchButton.setIcon(ICON_UP);
+		prevMatchButton.setIcon(Icons.ICON_UP);
 		prevMatchButton.setToolTipText(NLS.str("search.previous"));
 		prevMatchButton.addActionListener(e -> control.prevMatch());
 		prevMatchButton.setBorderPainted(false);
 		add(prevMatchButton);
 
 		nextMatchButton = new JButton();
-		nextMatchButton.setIcon(ICON_DOWN);
+		nextMatchButton.setIcon(Icons.ICON_DOWN);
 		nextMatchButton.setToolTipText(NLS.str("search.next"));
 		nextMatchButton.addActionListener(e -> control.nextMatch());
 		nextMatchButton.setBorderPainted(false);
 		add(nextMatchButton);
 
 		markAllCB = new JToggleButton();
-		markAllCB.setIcon(ICON_MARK);
-		markAllCB.setSelectedIcon(ICON_MARK_SELECTED);
+		markAllCB.setIcon(Icons.ICON_MARK);
+		markAllCB.setSelectedIcon(Icons.ICON_MARK_SELECTED);
 		markAllCB.setToolTipText(NLS.str("search.mark_all"));
 		markAllCB.setSelected(true);
 		markAllCB.addActionListener(searchSettingListener);
 		add(markAllCB);
 
 		JButton closeButton = new JButton();
-		closeButton.setIcon(ICON_CLOSE);
+		closeButton.setIcon(Icons.ICON_CLOSE);
 		closeButton.addActionListener(e -> toggle());
 		closeButton.setBorderPainted(false);
 		add(closeButton);
@@ -245,8 +239,10 @@ public class HexSearchBar extends JToolBar {
 				condition.setSearchText(searchField.getText());
 			} else {
 				String hexBytes = searchField.getText();
-				if (isValidHexString(hexBytes)) {
-					condition.setBinaryData(new ByteArrayEditableData(hexStringToByteArray(hexBytes)));
+				boolean isValidHexInput = HexUtils.isValidHexString(hexBytes);
+				UiUtils.highlightAsErrorField(searchField, !isValidHexInput);
+				if (isValidHexInput) {
+					condition.setBinaryData(new ByteArrayEditableData(HexUtils.hexStringToByteArray(hexBytes)));
 				}
 			}
 		}
@@ -254,6 +250,7 @@ public class HexSearchBar extends JToolBar {
 	}
 
 	public void updateFindStatus() {
+		UiUtils.highlightAsErrorField(searchField, false);
 		SearchCondition condition = makeSearchCondition();
 		if (condition.getSearchMode() == SearchCondition.SearchMode.TEXT) {
 			findTypeCB.setSelected(false);
@@ -268,45 +265,6 @@ public class HexSearchBar extends JToolBar {
 	private void makeFindByHexButton() {
 		findTypeCB.setSelected(true);
 		findTypeCB.setToolTipText(NLS.str("search.find_type_hex"));
-	}
-
-	private boolean isValidHexString(String hexString) {
-		String cleanS = hexString.replace(" ", "");
-		int len = cleanS.length();
-		try {
-			boolean isPair = len % 2 == 0;
-			if (isPair) {
-				Long.parseLong(cleanS, 16);
-				return true;
-			}
-		} catch (NumberFormatException ex) {
-			// ignore error
-			return false;
-		}
-		return false;
-	}
-
-	public byte[] hexStringToByteArray(String hexString) {
-		if (hexString == null || hexString.isEmpty()) {
-			return new byte[0];
-		}
-		String cleanS = hexString.replace(" ", "");
-		int len = cleanS.length();
-		if (!isValidHexString(hexString)) {
-			throw new IllegalArgumentException("Hex string must have even length. Input length: " + len);
-		}
-
-		byte[] data = new byte[len / 2];
-		for (int i = 0; i < len; i += 2) {
-			String byteString = cleanS.substring(i, i + 2);
-			try {
-				int intValue = Integer.parseInt(byteString, 16);
-				data[i / 2] = (byte) intValue;
-			} catch (NumberFormatException e) {
-				throw new IllegalArgumentException("Input string contains non-hex characters at index " + i + ": " + byteString, e);
-			}
-		}
-		return data;
 	}
 
 	public interface Control {

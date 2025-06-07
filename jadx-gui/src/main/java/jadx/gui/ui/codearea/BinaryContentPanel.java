@@ -13,23 +13,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import jadx.api.ResourcesLoader;
-import jadx.core.utils.exceptions.JadxException;
+import jadx.api.resources.ResourceContentType;
+import jadx.gui.jobs.BackgroundExecutor;
 import jadx.gui.settings.JadxSettings;
 import jadx.gui.settings.LineNumbersMode;
 import jadx.gui.treemodel.JNode;
 import jadx.gui.treemodel.JResource;
 import jadx.gui.ui.hexviewer.HexPreviewPanel;
 import jadx.gui.ui.tab.TabbedPane;
+import jadx.gui.utils.UiUtils;
 
 public class BinaryContentPanel extends AbstractCodeContentPanel {
 	private static final Logger LOG = LoggerFactory.getLogger(BinaryContentPanel.class);
 	private final transient CodePanel textCodePanel;
 	private final transient HexPreviewPanel hexPreviewPanel;
 	private final transient JTabbedPane areaTabbedPane;
-
-	public BinaryContentPanel(TabbedPane panel, JNode jnode) {
-		this(panel, jnode, true);
-	}
 
 	public BinaryContentPanel(TabbedPane panel, JNode jnode, boolean supportsText) {
 		super(panel, jnode);
@@ -46,23 +44,29 @@ public class BinaryContentPanel extends AbstractCodeContentPanel {
 		areaTabbedPane = buildTabbedPane();
 		add(areaTabbedPane);
 
-		SwingUtilities.invokeLater(this::loadCodePanel);
+		SwingUtilities.invokeLater(this::loadSelectedPanel);
 	}
 
-	private void loadToHexView(JNode binaryNode) {
-		byte[] bytes = null;
+	private void loadHexView() {
+		if (hexPreviewPanel.isDataLoaded()) {
+			return;
+		}
+		UiUtils.notUiThreadGuard();
+		byte[] bytes = getNodeBytes();
+		UiUtils.uiRunAndWait(() -> hexPreviewPanel.setData(bytes));
+	}
+
+	private byte[] getNodeBytes() {
+		JNode binaryNode = getNode();
 		if (binaryNode instanceof JResource) {
 			JResource jResource = (JResource) binaryNode;
 			try {
-				bytes = ResourcesLoader.decodeStream(jResource.getResFile(), (size, is) -> is.readAllBytes());
-			} catch (JadxException e) {
+				return ResourcesLoader.decodeStream(jResource.getResFile(), (size, is) -> is.readAllBytes());
+			} catch (Exception e) {
 				LOG.error("Failed to directly load resource binary data {}: {}", jResource.getName(), e.getMessage());
 			}
 		}
-		if (bytes == null) {
-			bytes = binaryNode.getCodeInfo().getCodeStr().getBytes(StandardCharsets.UTF_8);
-		}
-		hexPreviewPanel.setData(bytes);
+		return binaryNode.getCodeInfo().getCodeStr().getBytes(StandardCharsets.US_ASCII);
 	}
 
 	private JTabbedPane buildTabbedPane() {
@@ -75,18 +79,19 @@ public class BinaryContentPanel extends AbstractCodeContentPanel {
 		tabbedPane.add(hexPreviewPanel, "Hex");
 		tabbedPane.addChangeListener(e -> {
 			getMainWindow().toggleHexViewMenu();
+			loadSelectedPanel();
 		});
 		return tabbedPane;
 	}
 
-	private void loadCodePanel() {
+	private void loadSelectedPanel() {
+		BackgroundExecutor bgExec = getMainWindow().getBackgroundExecutor();
 		Component codePanel = getSelectedPanel();
 		if (codePanel instanceof CodeArea) {
 			CodeArea codeArea = (CodeArea) codePanel;
-			codeArea.load();
-			loadToHexView(getNode());
+			bgExec.startLoading(codeArea::load);
 		} else {
-			loadToHexView(getNode());
+			bgExec.startLoading(this::loadHexView);
 		}
 	}
 
@@ -96,6 +101,19 @@ public class BinaryContentPanel extends AbstractCodeContentPanel {
 			return textCodePanel.getCodeArea();
 		} else {
 			return null;
+		}
+	}
+
+	@Override
+	public void scrollToPos(int pos) {
+		BackgroundExecutor bgExec = getMainWindow().getBackgroundExecutor();
+		if (getNode().getContentType() == ResourceContentType.CONTENT_TEXT) {
+			areaTabbedPane.setSelectedComponent(textCodePanel);
+			AbstractCodeArea codeArea = textCodePanel.getCodeArea();
+			bgExec.startLoading(codeArea::load, () -> codeArea.scrollToPos(pos));
+		} else {
+			areaTabbedPane.setSelectedComponent(hexPreviewPanel);
+			bgExec.startLoading(this::loadHexView, () -> hexPreviewPanel.scrollToOffset(pos));
 		}
 	}
 

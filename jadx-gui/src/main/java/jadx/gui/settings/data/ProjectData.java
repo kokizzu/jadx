@@ -11,6 +11,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.Nullable;
 
 import jadx.api.data.impl.JadxCodeData;
+import jadx.gui.search.providers.ResourceFilter;
 
 public class ProjectData {
 	private int projectVersion = 2;
@@ -22,6 +23,9 @@ public class ProjectData {
 	private @Nullable String cacheDir; // don't use relative path adapter
 	private boolean enableLiveReload = false;
 	private List<String> searchHistory = new ArrayList<>();
+	private String searchResourcesFilter = ResourceFilter.DEFAULT_STR;
+	private int searchResourcesSizeLimit = 0; // in MB
+
 	protected Map<String, String> pluginOptions = new HashMap<>();
 
 	public List<Path> getFiles() {
@@ -99,6 +103,22 @@ public class ProjectData {
 
 	public void setSearchHistory(List<String> searchHistory) {
 		this.searchHistory = searchHistory;
+	}
+
+	public String getSearchResourcesFilter() {
+		return searchResourcesFilter;
+	}
+
+	public void setSearchResourcesFilter(String searchResourcesFilter) {
+		this.searchResourcesFilter = searchResourcesFilter;
+	}
+
+	public int getSearchResourcesSizeLimit() {
+		return searchResourcesSizeLimit;
+	}
+
+	public void setSearchResourcesSizeLimit(int searchResourcesSizeLimit) {
+		this.searchResourcesSizeLimit = searchResourcesSizeLimit;
 	}
 
 	public Map<String, String> getPluginOptions() {

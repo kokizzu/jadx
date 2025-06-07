@@ -1,5 +1,7 @@
 package jadx.gui.treemodel;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -17,6 +19,7 @@ import jadx.api.ResourceFile;
 import jadx.api.ResourceType;
 import jadx.api.ResourcesLoader;
 import jadx.api.impl.SimpleCodeInfo;
+import jadx.api.resources.ResourceContentType;
 import jadx.core.utils.ListUtils;
 import jadx.core.utils.Utils;
 import jadx.core.xmlgen.ResContainer;
@@ -153,19 +156,21 @@ public class JResource extends JLoadableNode {
 		if (resFile == null) {
 			return null;
 		}
-		if (resFile.getType() == ResourceType.IMG) {
-			return new ImagePanel(tabbedPane, this);
+		// TODO: allow to register custom viewers
+		switch (resFile.getType()) {
+			case IMG:
+				return new ImagePanel(tabbedPane, this);
+			case FONT:
+				return new FontPanel(tabbedPane, this);
 		}
-		if (resFile.getType() == ResourceType.LIB) {
+		if (getContentType() == ResourceContentType.CONTENT_BINARY) {
 			return new BinaryContentPanel(tabbedPane, this, false);
 		}
-		if (resFile.getType() == ResourceType.FONT) {
-			return new FontPanel(tabbedPane, this);
+		if (getSyntaxByExtension(resFile.getDeobfName()) != null) {
+			return new CodeContentPanel(tabbedPane, this);
 		}
-		if (getSyntaxByExtension(resFile.getDeobfName()) == null) {
-			return new BinaryContentPanel(tabbedPane, this);
-		}
-		return new CodeContentPanel(tabbedPane, this);
+		// unknown file type, show both text and binary
+		return new BinaryContentPanel(tabbedPane, this, true);
 	}
 
 	@Override
@@ -184,11 +189,16 @@ public class JResource extends JLoadableNode {
 		return codeInfo;
 	}
 
+	@Override
+	public ResourceContentType getContentType() {
+		if (type == JResType.FILE) {
+			return resFile.getType().getContentType();
+		}
+		return ResourceContentType.CONTENT_NONE;
+	}
+
 	private ICodeInfo loadContent() {
 		if (resFile == null || type != JResType.FILE) {
-			return ICodeInfo.EMPTY;
-		}
-		if (!isSupportedForView(resFile.getType())) {
 			return ICodeInfo.EMPTY;
 		}
 		ResContainer rc = resFile.loadContent();
@@ -215,11 +225,20 @@ public class JResource extends JLoadableNode {
 
 			case RES_LINK:
 				try {
-					return ResourcesLoader.decodeStream(rc.getResLink(), (size, is) -> {
+					ResourceFile resourceFile = rc.getResLink();
+					return ResourcesLoader.decodeStream(resourceFile, (size, is) -> {
+						// TODO: check size before loading
 						if (size > 10 * 1024 * 1024L) {
 							return new SimpleCodeInfo("File too large for view");
 						}
-						return ResourcesLoader.loadToCodeWriter(is);
+						Charset charset;
+						if (resourceFile.getType().getContentType() == ResourceContentType.CONTENT_TEXT) {
+							charset = StandardCharsets.UTF_8;
+						} else {
+							// force one byte charset for binary data to have the same offsets as in a byte array
+							charset = StandardCharsets.US_ASCII;
+						}
+						return ResourcesLoader.loadToCodeWriter(is, charset);
 					});
 				} catch (Exception e) {
 					return new SimpleCodeInfo("Failed to load resource file:\n" + Utils.getStackTrace(e));
@@ -326,7 +345,6 @@ public class JResource extends JLoadableNode {
 
 	public static boolean isSupportedForView(ResourceType type) {
 		switch (type) {
-			case CODE:
 			case SOUNDS:
 			case VIDEOS:
 			case ARCHIVE:

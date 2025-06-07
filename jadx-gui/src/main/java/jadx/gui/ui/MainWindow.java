@@ -39,7 +39,6 @@ import javax.swing.Action;
 import javax.swing.Box;
 import javax.swing.JCheckBox;
 import javax.swing.JCheckBoxMenuItem;
-import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -117,7 +116,6 @@ import jadx.gui.plugins.quark.QuarkDialog;
 import jadx.gui.settings.JadxProject;
 import jadx.gui.settings.JadxSettings;
 import jadx.gui.settings.ui.JadxSettingsWindow;
-import jadx.gui.settings.ui.plugins.PluginSettings;
 import jadx.gui.tree.TreeExpansionService;
 import jadx.gui.treemodel.ApkSignatureNode;
 import jadx.gui.treemodel.JInputFiles;
@@ -155,13 +153,13 @@ import jadx.gui.ui.panel.IssuesPanel;
 import jadx.gui.ui.panel.JDebuggerPanel;
 import jadx.gui.ui.panel.ProgressPanel;
 import jadx.gui.ui.popupmenu.RecentProjectsMenuListener;
+import jadx.gui.ui.startpage.StartPageNode;
 import jadx.gui.ui.tab.EditorSyncManager;
 import jadx.gui.ui.tab.NavigationController;
 import jadx.gui.ui.tab.QuickTabsTree;
 import jadx.gui.ui.tab.TabbedPane;
 import jadx.gui.ui.tab.TabsController;
 import jadx.gui.ui.tab.dnd.TabDndController;
-import jadx.gui.ui.treenodes.StartPageNode;
 import jadx.gui.ui.treenodes.SummaryNode;
 import jadx.gui.ui.treenodes.UndisplayedStringsNode;
 import jadx.gui.update.JadxUpdate;
@@ -539,14 +537,19 @@ public class MainWindow extends JFrame {
 	}
 
 	public void reopen() {
-		synchronized (ReloadProject.EVENT) {
-			saveAll();
-			closeAll();
-			loadFiles(() -> {
-				menuBar.reloadShortcuts();
-				events().send(ReloadSettingsWindow.INSTANCE);
-			});
-		}
+		LOG.debug("starting reopen");
+		UiUtils.bgRun(() -> {
+			getBackgroundExecutor().waitForComplete();
+			synchronized (ReloadProject.EVENT) {
+				saveAll();
+				closeAll();
+				loadFiles(() -> {
+					menuBar.reloadShortcuts();
+					events().send(ReloadSettingsWindow.INSTANCE);
+					LOG.debug("reopen complete");
+				});
+			}
+		});
 	}
 
 	private void openProject(Path path, Runnable onFinish) {
@@ -624,7 +627,7 @@ public class MainWindow extends JFrame {
 		shortcutsController.reset();
 		UiUtils.resetClipboardOwner();
 		System.gc();
-		update();
+		UiUtils.uiRun(this::update);
 	}
 
 	private void checkLoadedStatus() {
@@ -987,13 +990,15 @@ public class MainWindow extends JFrame {
 		ContentPanel panel = tabbedPane.getSelectedContentPanel();
 		if (panel instanceof AbstractCodeContentPanel) {
 			AbstractCodeArea codeArea = ((AbstractCodeContentPanel) panel).getCodeArea();
-			String preferText = codeArea.getSelectedText();
-			if (StringUtils.isEmpty(preferText)) {
-				preferText = codeArea.getWordUnderCaret();
-			}
-			if (!StringUtils.isEmpty(preferText)) {
-				SearchDialog.searchText(MainWindow.this, preferText);
-				return;
+			if (codeArea != null) {
+				String preferText = codeArea.getSelectedText();
+				if (StringUtils.isEmpty(preferText)) {
+					preferText = codeArea.getWordUnderCaret();
+				}
+				if (!StringUtils.isEmpty(preferText)) {
+					SearchDialog.searchText(MainWindow.this, preferText);
+					return;
+				}
 			}
 		}
 		SearchDialog.search(MainWindow.this, SearchDialog.SearchPreset.TEXT);
@@ -1138,7 +1143,7 @@ public class MainWindow extends JFrame {
 		hexViewerMenu = new JadxMenu(NLS.str("menu.hex_viewer"), shortcutsController);
 		initHexViewMenu();
 
-		JadxGuiAction prefsAction = new JadxGuiAction(ActionModel.PREFS, this::openSettings);
+		JadxGuiAction prefsAction = new JadxGuiAction(ActionModel.PREFS, () -> openSettings());
 		JadxGuiAction exitAction = new JadxGuiAction(ActionModel.EXIT, this::closeWindow);
 
 		isFlattenPackage = settings.isFlattenPackage();
@@ -1532,16 +1537,23 @@ public class MainWindow extends JFrame {
 	}
 
 	private void openSettings() {
+		openSettings(null);
+	}
+
+	private void openSettings(@Nullable String navigateTo) {
 		settingsOpen = true;
 
-		JDialog settingsWindow = new JadxSettingsWindow(MainWindow.this, settings);
-		settingsWindow.setVisible(true);
+		JadxSettingsWindow settingsWindow = new JadxSettingsWindow(MainWindow.this, settings);
 		settingsWindow.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosed(WindowEvent e) {
 				settingsOpen = false;
 			}
 		});
+		if (navigateTo != null) {
+			settingsWindow.activatePage(navigateTo);
+		}
+		settingsWindow.setVisible(true);
 	}
 
 	public boolean isSettingsOpen() {
@@ -1780,8 +1792,8 @@ public class MainWindow extends JFrame {
 
 	public void resetPluginsMenu() {
 		pluginsMenu.removeAll();
-		pluginsMenu.add(new ActionHandler(() -> new PluginSettings(this, settings).addPlugin())
-				.withNameAndDesc(NLS.str("preferences.plugins.install")));
+		pluginsMenu.add(new ActionHandler(() -> openSettings("PluginSettingsGroup.class"))
+				.withNameAndDesc(NLS.str("preferences.plugins.manage")));
 	}
 
 	public void addToPluginsMenu(Action item) {
