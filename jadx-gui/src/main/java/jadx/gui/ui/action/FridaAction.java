@@ -78,7 +78,9 @@ public final class FridaAction extends JNodeAction {
 	}
 
 	private String generateMethodSnippet(JMethod jMth) {
-		return getMethodSnippet(jMth.getJavaMethod(), jMth.getJParent());
+		String classSnippet = generateClassSnippet(jMth.getJParent());
+		String methodSnippet = getMethodSnippet(jMth.getJavaMethod(), jMth.getJParent());
+		return String.format("%s\n%s", classSnippet, methodSnippet);
 	}
 
 	private String generateMethodSnippet(JavaMethod javaMethod, JClass jc) {
@@ -115,17 +117,14 @@ public final class FridaAction extends JNodeAction {
 			logArgs = ": " + argNames.stream().map(arg -> arg + "=${" + arg + "}").collect(Collectors.joining(", "));
 		}
 		String shortClassName = mth.getParentClass().getAlias();
-		String classSnippet = generateClassSnippet(jc);
 		if (methodInfo.isConstructor() || methodInfo.getReturnType() == ArgType.VOID) {
 			// no return value
-			return classSnippet + "\n"
-					+ shortClassName + "[\"" + methodName + "\"]" + overload + ".implementation = function (" + args + ") {\n"
+			return shortClassName + "[\"" + methodName + "\"]" + overload + ".implementation = function (" + args + ") {\n"
 					+ "    console.log(`" + shortClassName + "." + newMethodName + " is called" + logArgs + "`);\n"
 					+ "    this[\"" + methodName + "\"](" + args + ");\n"
 					+ "};";
 		}
-		return classSnippet + "\n"
-				+ shortClassName + "[\"" + methodName + "\"]" + overload + ".implementation = function (" + args + ") {\n"
+		return shortClassName + "[\"" + methodName + "\"]" + overload + ".implementation = function (" + args + ") {\n"
 				+ "    console.log(`" + shortClassName + "." + newMethodName + " is called" + logArgs + "`);\n"
 				+ "    let result = this[\"" + methodName + "\"](" + args + ");\n"
 				+ "    console.log(`" + shortClassName + "." + newMethodName + " result=${result}`);\n"
@@ -137,7 +136,7 @@ public final class FridaAction extends JNodeAction {
 		JavaClass javaClass = jc.getCls();
 		String rawClassName = StringEscapeUtils.escapeEcmaScript(javaClass.getRawName());
 		String shortClassName = javaClass.getName();
-		return String.format("let %s = Java.use(\"%s\");", shortClassName, rawClassName);
+		return String.format("var %s = Java.use(\"%s\");", shortClassName, rawClassName);
 	}
 
 	private void showMethodSelectionDialog(JClass jc) {
@@ -150,6 +149,8 @@ public final class FridaAction extends JNodeAction {
 
 	private String generateClassAllMethodSnippet(JClass jc, List<JavaMethod> methodList) {
 		StringBuilder result = new StringBuilder();
+		String classSnippet = generateClassSnippet(jc);
+		result.append(classSnippet).append("\n");
 		for (JavaMethod javaMethod : methodList) {
 			result.append(generateMethodSnippet(javaMethod, jc)).append("\n");
 		}

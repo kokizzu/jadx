@@ -3,12 +3,13 @@ plugins {
 }
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion "30.0.2"
+	namespace "{{applicationId}}"
+    compileSdkVersion {{compileSdkVersion}}
 
     defaultConfig {
         applicationId '{{applicationId}}'
         minSdkVersion {{minSdkVersion}}
+        //noinspection ExpiredTargetSdkVersion
         targetSdkVersion {{targetSdkVersion}}
         versionCode {{versionCode}}
         versionName "{{versionName}}"
